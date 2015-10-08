@@ -28,6 +28,7 @@ along with Decoda.  If not, see <http://www.gnu.org/licenses/>.
 #include "StlUtility.h"
 #include "XmlUtility.h"
 #include "DebugHelp.h"
+#include "BabeLua.h"
 
 #include <assert.h>
 #include <algorithm>
@@ -296,6 +297,9 @@ bool DebugBackend::Initialize(HINSTANCE hInstance)
     m_eventChannel.WriteUInt32(reinterpret_cast<unsigned int>(FinishInitialize));
     m_eventChannel.Flush();
 
+	// babelua
+	SetOutputPackagePath(true);
+
     return true;
 
 }
@@ -356,7 +360,7 @@ DebugBackend::VirtualMachine* DebugBackend::AttachState(unsigned long api, lua_S
 
     // This state may be a thread which will be garbage collected, so we need to register
     // to recieve notification when it is destroyed.
-
+	int tt1 = lua_gettop_dll(api, L);
     if (lua_pushthread_dll(api, L))
     {
 
@@ -375,7 +379,8 @@ DebugBackend::VirtualMachine* DebugBackend::AttachState(unsigned long api, lua_S
         lua_pop_dll(api, L, 1);
     
     }
-
+	int tt2 = lua_gettop_dll(api, L);
+	assert(tt1 == tt2);
     return vm;
 
 }
@@ -391,9 +396,10 @@ void DebugBackend::DetachState(unsigned long api, lua_State* L)
 
     while (iterator != m_classInfos.end())
     {
-        if (iterator->L == L)
+		const ClassInfo &ci = *iterator;
+        if (ci.L == L)
         {
-            m_classInfos.erase(iterator++);
+			iterator = m_classInfos.erase(iterator);
         }
         else
         {
@@ -594,7 +600,22 @@ int DebugBackend::RegisterScript(lua_State* L, const char* source, size_t size, 
     std::string fileName;
 
     size_t length = strlen(name);
+	
+	// babelua
+	if (IsOutputPackagePath())
+	{
+		SetOutputPackagePath(false);
+		
+		unsigned long api = GetApiForVm(L);
+		std::string packagePath = ::GetPackagePath(L,api);
 
+		std::string message;
+		message = "\npackage.path: ";
+		message += packagePath;
+		message += "\n";
+		Message(message.c_str());
+	}
+	
     // Check if the file name is actually the source. This happens when calling
     // luaL_loadstring and doesn't make for a very good display.
     if (source != NULL && strncmp(name, source, length) == 0)
@@ -613,7 +634,32 @@ int DebugBackend::RegisterScript(lua_State* L, const char* source, size_t size, 
         {
             fileName.erase(0, 1);
         }
+		
+		// babelua
+		if(::PathIsRelative(fileName.c_str()))
+		{
+			std::string message;
 
+			message = "\nrelative: ";
+			message += fileName;
+			Message(message.c_str());
+
+			unsigned long api = GetApiForVm(L);
+			std::string packagePath = ::GetPackagePath(L,api);
+			std::string filePath = fileName;
+			if(BabeFindFile(fileName.c_str(),packagePath.c_str(),filePath))
+			{
+				char szFullPath[MAX_PATH];
+				char* pFullPath = (char*)szFullPath;
+				char **lppPart = &pFullPath;
+				::GetFullPathNameA(filePath.c_str(),MAX_PATH,szFullPath,lppPart);
+
+				fileName = szFullPath;
+			}
+			message = "findfile: ";
+			message += fileName;
+			Message(message.c_str());
+		}
     }
 
     CodeState state = CodeState_Normal;
@@ -741,7 +787,7 @@ void DebugBackend::HookCallback(unsigned long api, lua_State* L, lua_Debug* ar)
             lua_pushstring_dll(api, L, "version_num");
             lua_gettable_dll(api, L, jitTable);
 
-            int version = lua_tointeger_dll(api, L, -1);
+            lua_Integer version = lua_tointeger_dll(api, L, -1);
             if (version >= 20000)
             {
                 vm->luaJitWorkAround = true;
@@ -760,7 +806,6 @@ void DebugBackend::HookCallback(unsigned long api, lua_State* L, lua_Debug* ar)
 
     // Get the name of the VM. Polling like this is pretty excessive since the
     // name won't change often, but it's the easiest way and works fine.
-
     lua_rawgetglobal_dll(api, L, "decoda_name");
     const char* name = lua_tostring_dll(api, L, -1);
 
@@ -955,7 +1000,10 @@ void DebugBackend::UpdateHookMode(unsigned long api, lua_State* L, lua_Debug* ho
 
     if(!vm->haveActiveBreakpoints)
     {
-        mode = HookMode_None;
+		// 这里要注释掉
+		// 对于skynet框架，vm会被缓存起来等待后面重新分配，如果设置成了HookMode_None，将没有机会
+		// 重新设置断点。
+		// mode = HookMode_None;
     }
 
     if(currentMode != mode)
@@ -1453,7 +1501,6 @@ void DebugBackend::BreakFromScript(unsigned long api, lua_State* L)
 
 int DebugBackend::Call(unsigned long api, lua_State* L, int nargs, int nresults, int errorfunc)
 {
-
     // Check it's not our error handler that's getting called (happens when there's an
     // error). We also need to check that our error handler is not the error function,
     // since that can happen if one of the Lua interfaces we hooked calls another one
@@ -1502,6 +1549,61 @@ int DebugBackend::Call(unsigned long api, lua_State* L, int nargs, int nresults,
 
     }
 
+}
+
+int DebugBackend::CallK(unsigned long api, lua_State* L, int nargs, int nresults, int errorfunc, int ctk, lua_CFunction k)
+{
+	// Check it's not our error handler that's getting called (happens when there's an
+	// error). We also need to check that our error handler is not the error function,
+	// since that can happen if one of the Lua interfaces we hooked calls another one
+	// internally.
+	int tt1 = lua_gettop_dll(api, L);
+	if (lua_tocfunction_dll(api, L, -1) == StaticErrorHandler || (errorfunc != 0 && lua_tocfunction_dll(api, L, errorfunc) == StaticErrorHandler))
+	{
+		return lua_pcallk_dll(api, L, nargs, nresults, errorfunc, ctk, k);
+	}
+	else
+	{
+
+		int result = 0;
+
+		/*if (lua_gettop_dll(api, L) >= nargs + 1)
+		{
+
+			// Push our error handler onto the stack before the function and the arguments.
+			if (errorfunc != 0)
+			{
+				lua_pushvalue_dll(api, L, errorfunc);
+			}
+			else
+			{
+				lua_pushnil_dll(api, L);
+			}
+			lua_pushcclosure_dll(api, L, StaticErrorHandler, 1);
+			int tt2 = lua_gettop_dll(api, L);
+
+			int errorHandler = lua_gettop_dll(api, L) - (nargs + 1);
+			lua_insert_dll(api, L, errorHandler);
+			int tt3 = lua_gettop_dll(api, L);
+
+			// Invoke the function
+			result = lua_pcallk_dll(api, L, nargs, nresults, errorHandler, ctk, k);
+			int tt4 = lua_gettop_dll(api, L);
+
+			// Remove our error handler from the stack.
+			lua_remove_dll(api, L, errorHandler);
+			int tt5 = lua_gettop_dll(api, L);
+		}
+		else*/
+		{
+			// In this case there wasn't a function on the top of the stack, so don't push our
+			// error handler there since it will get called instead.
+			result = lua_pcallk_dll(api, L, nargs, nresults, errorfunc, ctk, k);
+		}
+
+		return result;
+
+	}
 }
 
 int DebugBackend::StaticErrorHandler(lua_State* L)
@@ -1751,7 +1853,7 @@ int DebugBackend::IndexChained(unsigned long api, lua_State* L)
     // If it wasn't found, get from the global table.
     if (lua_isnil_dll(api, L, -1))
     {
-        lua_pop_dll( api, L, 1 );
+        lua_pop_dll(api, L, 1);
         lua_pushglobaltable_dll( api, L );
         lua_pushvalue_dll(api, L, key);
         lua_gettable_dll(api, L, -2);

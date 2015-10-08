@@ -61,14 +61,14 @@ typedef int             (*lua_absindex_cdecl_t)         (lua_State*, int);
 typedef int             (*lua_sethook_cdecl_t)          (lua_State*, lua_Hook, int, int);
 typedef int             (*lua_gethookmask_cdecl_t)      (lua_State*);
 typedef int             (*lua_getinfo_cdecl_t)          (lua_State*, const char*, lua_Debug* ar);
-typedef void            (*lua_remove_cdecl_t )          (lua_State*, int);
-typedef void            (*lua_rotate_cdecl_t )          (lua_State*, int, int);
+typedef void            (*lua_remove_cdecl_t)           (lua_State*, int);
+typedef void			(*lua_rotate_cdecl_t)			(lua_State *L, int idx, int n);
 typedef void            (*lua_settable_cdecl_t)         (lua_State*, int);
 typedef void            (*lua_gettable_cdecl_t)         (lua_State*, int);
 typedef void            (*lua_setglobal_cdecl_t)        (lua_State*, const char*);
 typedef void            (*lua_getglobal_cdecl_t)        (lua_State*, const char*);
 typedef void            (*lua_rawget_cdecl_t)           (lua_State *L, int idx);
-typedef void            (*lua_rawgeti_cdecl_t)          (lua_State *L, int idx, int n);
+typedef void            (*lua_rawgeti_cdecl_t)          (lua_State *L, int idx, lua_Integer n);
 typedef void            (*lua_rawset_cdecl_t)           (lua_State *L, int idx);
 typedef void            (*lua_pushstring_cdecl_t)       (lua_State*, const char*);
 typedef void            (*lua_pushlstring_cdecl_t)      (lua_State*, const char*, size_t);
@@ -82,12 +82,12 @@ typedef void            (*lua_insert_cdecl_t)           (lua_State*, int);
 typedef void            (*lua_pushnil_cdecl_t)          (lua_State*);
 typedef void            (*lua_pushcclosure_cdecl_t)     (lua_State*, lua_CFunction, int);
 typedef void            (*lua_pushvalue_cdecl_t)        (lua_State*, int);
-typedef void            (*lua_pushinteger_cdecl_t)      (lua_State*, int);
+typedef void            (*lua_pushinteger_cdecl_t)      (lua_State*, lua_Integer);
 typedef void            (*lua_pushnumber_cdecl_t)       (lua_State*, lua_Number);
 typedef const char*     (*lua_tostring_cdecl_t)         (lua_State*, int);
 typedef const char*     (*lua_tolstring_cdecl_t)        (lua_State*, int, size_t*);
 typedef int             (*lua_toboolean_cdecl_t)        (lua_State*, int);
-typedef int             (*lua_tointeger_cdecl_t)        (lua_State*, int);
+typedef lua_Integer		(*lua_tointeger_cdecl_t)        (lua_State*, int);
 typedef lua_Integer     (*lua_tointegerx_cdecl_t)       (lua_State*, int, int*);
 typedef lua_CFunction   (*lua_tocfunction_cdecl_t)      (lua_State*, int);
 typedef lua_Number      (*lua_tonumber_cdecl_t)         (lua_State*, int);
@@ -134,15 +134,15 @@ typedef int             (__stdcall *lua_error_stdcall_t)          (lua_State*);
 typedef int             (__stdcall *lua_absindex_stdcall_t)       (lua_State*, int);
 typedef int             (__stdcall *lua_sethook_stdcall_t)        (lua_State*, lua_Hook_stdcall, int, int);
 typedef int             (__stdcall *lua_gethookmaskstdcall_t)     (lua_State*);
-typedef int             (__stdcall *lua_getinfo_stdcall_t)        (lua_State*, const char*, lua_Debug*);
+typedef int             (__stdcall *lua_getinfo_stdcall_t)        (lua_State*, const char*, lua_Debug* ar);
 typedef void            (__stdcall *lua_remove_stdcall_t)         (lua_State*, int);
-typedef void            (__stdcall *lua_rotate_stdcall_t)         (lua_State*, int, int);
+typedef void			(__stdcall *lua_rotate_stdcall_t)			  (lua_State *L, int idx, int n);
 typedef void            (__stdcall *lua_settable_stdcall_t)       (lua_State*, int);
 typedef void            (__stdcall *lua_gettable_stdcall_t)       (lua_State*, int);
 typedef void            (__stdcall *lua_setglobal_stdcall_t)      (lua_State*, const char*);
 typedef void            (__stdcall *lua_getglobal_stdcall_t)      (lua_State*, const char*);
 typedef void            (__stdcall *lua_rawget_stdcall_t)         (lua_State *L, int idx);
-typedef void            (__stdcall *lua_rawgeti_stdcall_t)        (lua_State *L, int idx, int n);
+typedef void            (__stdcall *lua_rawgeti_stdcall_t)        (lua_State *L, int idx, lua_Integer n);
 typedef void            (__stdcall *lua_rawset_stdcall_t)         (lua_State *L, int idx);
 typedef void            (__stdcall *lua_pushstring_stdcall_t)     (lua_State*, const char*);
 typedef void            (__stdcall *lua_pushlstring_stdcall_t)    (lua_State*, const char*, size_t);
@@ -156,12 +156,12 @@ typedef void            (__stdcall *lua_insert_stdcall_t)         (lua_State*, i
 typedef void            (__stdcall *lua_pushnil_stdcall_t)        (lua_State*);
 typedef void            (__stdcall *lua_pushcclosure_stdcall_t)   (lua_State*, lua_CFunction, int);
 typedef void            (__stdcall *lua_pushvalue_stdcall_t)      (lua_State*, int);
-typedef void            (__stdcall *lua_pushinteger_stdcall_t)    (lua_State*, int);
+typedef void            (__stdcall *lua_pushinteger_stdcall_t)    (lua_State*, lua_Integer);
 typedef void            (__stdcall *lua_pushnumber_stdcall_t)     (lua_State*, lua_Number);
 typedef const char*     (__stdcall *lua_tostring_stdcall_t)       (lua_State*, int);
 typedef const char*     (__stdcall *lua_tolstring_stdcall_t)      (lua_State*, int, size_t*);
 typedef int             (__stdcall *lua_toboolean_stdcall_t)      (lua_State*, int);
-typedef int             (__stdcall *lua_tointeger_stdcall_t)      (lua_State*, int);
+typedef lua_Integer		(__stdcall *lua_tointeger_stdcall_t)      (lua_State*, int);
 typedef lua_Integer     (__stdcall *lua_tointegerx_stdcall_t)     (lua_State*, int, int*);
 typedef lua_CFunction   (__stdcall *lua_tocfunction_stdcall_t)    (lua_State*, int);
 typedef lua_Number      (__stdcall *lua_tonumber_stdcall_t)       (lua_State*, int);
@@ -229,13 +229,13 @@ struct LuaInterface
     lua_close_cdecl_t            lua_close_dll_cdecl;
     lua_newthread_cdecl_t        lua_newthread_dll_cdecl;
     lua_error_cdecl_t            lua_error_dll_cdecl;
-	lua_absindex_cdecl_t         lua_absindex_dll_cdecl;
+		lua_absindex_cdecl_t         lua_absindex_dll_cdecl;
     lua_gettop_cdecl_t           lua_gettop_dll_cdecl;
     lua_sethook_cdecl_t          lua_sethook_dll_cdecl;
     lua_gethookmask_cdecl_t      lua_gethookmask_dll_cdecl;
     lua_getinfo_cdecl_t          lua_getinfo_dll_cdecl;
     lua_remove_cdecl_t           lua_remove_dll_cdecl;
-    lua_rotate_cdecl_t           lua_rotate_dll_cdecl;
+	lua_rotate_cdecl_t			 lua_rotate_dll_cdecl;
     lua_settable_cdecl_t         lua_settable_dll_cdecl;
     lua_gettable_cdecl_t         lua_gettable_dll_cdecl;
     lua_setglobal_cdecl_t        lua_setglobal_dll_cdecl;
@@ -310,7 +310,7 @@ struct LuaInterface
     lua_gethookmaskstdcall_t     lua_gethookmask_dll_stdcall;
     lua_getinfo_stdcall_t        lua_getinfo_dll_stdcall;
     lua_remove_stdcall_t         lua_remove_dll_stdcall;
-    lua_rotate_stdcall_t         lua_rotate_dll_stdcall;
+	lua_rotate_stdcall_t		lua_rotate_dll_stdcall;
     lua_settable_stdcall_t       lua_settable_dll_stdcall;
     lua_gettable_stdcall_t       lua_gettable_dll_stdcall;
     lua_setglobal_stdcall_t      lua_setglobal_dll_stdcall;
@@ -973,7 +973,7 @@ int GetRegistryIndex(unsigned long api)
 int lua_absindex_dll(unsigned long api, lua_State* L, int i)
 {
     if (g_interfaces[api].lua_absindex_dll_cdecl != NULL)
-    {
+{
         return g_interfaces[api].lua_absindex_dll_cdecl(L, i);
     }
     else if (g_interfaces[api].lua_absindex_dll_stdcall != NULL)
@@ -994,14 +994,14 @@ int lua_absindex_dll(unsigned long api, lua_State* L, int i)
 
 int lua_upvalueindex_dll(unsigned long api, int i)
 {
-    if( g_interfaces[api].version >= 520)
+   if( g_interfaces[api].version >= 520)
     {
         return GetRegistryIndex(api) - i;
     }
     else 
     {
-        return GetGlobalsIndex( api ) - i;
-    }
+    return GetGlobalsIndex(api) - i;
+}
 }
 
 void lua_setglobal_dll(unsigned long api, lua_State* L, const char* s)
@@ -1435,7 +1435,7 @@ void lua_pushnumber_dll(unsigned long api, lua_State* L, lua_Number value)
     }
 }
 
-void lua_pushinteger_dll(unsigned long api, lua_State* L, int value)
+void lua_pushinteger_dll(unsigned long api, lua_State* L, lua_Integer value)
 {
     if (g_interfaces[api].lua_pushinteger_dll_cdecl != NULL ||
         g_interfaces[api].lua_pushinteger_dll_stdcall != NULL)
@@ -1571,7 +1571,7 @@ int lua_toboolean_dll(unsigned long api, lua_State* L, int index)
     }
 }
 
-int lua_tointeger_dll(unsigned long api, lua_State* L, int index)
+lua_Integer lua_tointeger_dll(unsigned long api, lua_State* L, int index)
 {
     if (g_interfaces[api].lua_tointegerx_dll_cdecl != NULL ||
         g_interfaces[api].lua_tointegerx_dll_stdcall != NULL)
@@ -1697,16 +1697,31 @@ int lua_loadbuffer_dll(unsigned long api, lua_State* L, const char* buffer, size
     return 0;
 }
 
+void lua_callk_dll(unsigned long api, lua_State* L, int nargs, int nresults, int ctx, lua_CFunction k)
+{
+	if (g_interfaces[api].lua_callk_dll_cdecl != NULL)
+	{
+		return g_interfaces[api].lua_callk_dll_cdecl(L, nargs, nresults, ctx, k);
+	}
+	else 
+	{
+		return g_interfaces[api].lua_callk_dll_stdcall(L, nargs, nresults, ctx, k);
+	}
+}
+
 void lua_call_dll(unsigned long api, lua_State* L, int nargs, int nresults)
 {
     if (g_interfaces[api].lua_call_dll_cdecl != NULL)
     {
         return g_interfaces[api].lua_call_dll_cdecl(L, nargs, nresults);
     }
-    else
+	else if (g_interfaces[api].lua_call_dll_stdcall != NULL)
     {
         return g_interfaces[api].lua_call_dll_stdcall(L, nargs, nresults);
     }
+	else {
+		lua_callk_dll(api, L, nargs, nresults, 0, 0);
+	}
 }
 
 int lua_pcallk_dll(unsigned long api, lua_State* L, int nargs, int nresults, int errfunc, int ctx, lua_CFunction k)
@@ -2107,7 +2122,7 @@ void FinishLoadingLua(unsigned long api, bool stdcall)
         SET_STDCALL(lua_sethook);
         SET_STDCALL(lua_getinfo);
         SET_STDCALL(lua_remove);
-        SET_STDCALL(lua_rotate);
+		SET_STDCALL(lua_rotate);
         SET_STDCALL(lua_settable);
         SET_STDCALL(lua_gettable);
         SET_STDCALL(lua_setglobal);
@@ -2194,11 +2209,11 @@ void lua_call_worker(unsigned long api, lua_State* L, int nargs, int nresults, b
 
         DebugBackend::Get().AttachState(api, L);
 
-        if (g_interfaces[api].lua_call_dll_cdecl != NULL)
+        if (g_interfaces[api].lua_close_dll_cdecl != NULL)
         {
             stdcall = false;
         }
-        else if (g_interfaces[api].lua_call_dll_stdcall != NULL)
+        else if (g_interfaces[api].lua_close_dll_stdcall != NULL)
         {
             stdcall = true;
         }
@@ -2269,7 +2284,7 @@ void lua_callk_worker(unsigned long api, lua_State* L, int nargs, int nresults, 
             DebugBackend::Get().Message("Warning 1005: lua_call called with too few arguments on the stack", MessageType_Warning);
         }
 
-        if (DebugBackend::Get().Call(api, L, nargs, nresults, 0))
+		if (DebugBackend::Get().CallK(api, L, nargs, nresults, 0, ctk, k))
         {
             lua_error_dll(api, L);
         }
@@ -2404,7 +2419,7 @@ int lua_pcallk_worker(unsigned long api, lua_State* L, int nargs, int nresults, 
 
         if (GetAreInterceptsEnabled())
         {
-            result = DebugBackend::Get().Call(api, L, nargs, nresults, errfunc);
+            result = DebugBackend::Get().CallK(api, L, nargs, nresults, errfunc, ctx, k);
         }
         else
         {
@@ -2710,14 +2725,14 @@ int lua_load_worker(unsigned long api, lua_State* L, lua_Reader reader, void* da
 
     // Disables JIT compilation if LuaJIT is being used. Otherwise we won't get hooks for
     // this chunk.
-    if (DebugBackend::Get().EnableJit(api, L, false))
-    {
-        if (!g_warnedAboutJit)
-        {
-            DebugBackend::Get().Message("Warning 1007: Just-in-time compilation of Lua code disabled to allow debugging", MessageType_Warning);
-            g_warnedAboutJit = true;
-        }
-    }
+//     if (DebugBackend::Get().EnableJit(api, L, false))
+//     {
+//         if (!g_warnedAboutJit)
+//         {
+//             DebugBackend::Get().Message("Warning 1007: Just-in-time compilation of Lua code disabled to allow debugging", MessageType_Warning);
+//             g_warnedAboutJit = true;
+//         }
+//     }
 
     int result = lua_loadbuffer_dll(api, L, source, buffer.size(), name, mode);
 
@@ -3196,7 +3211,7 @@ std::string GetApplicationDirectory()
 
 bool LoadLuaFunctions(const stdext::hash_map<std::string, DWORD64>& symbols, HANDLE hProcess)
 {
-
+//	MessageBoxA(0,0,0,0);
     #define GET_FUNCTION_OPTIONAL(function)                                                                                     \
         {                                                                                                                       \
             stdext::hash_map<std::string, DWORD64>::const_iterator iterator = symbols.find(#function);                          \
@@ -3626,12 +3641,12 @@ bool LocateSymbolFile(const IMAGEHLP_MODULE64& moduleInfo, char fileName[_MAX_PA
 
 BOOL CALLBACK GatherSymbolsCallback(PSYMBOL_INFO pSymInfo, ULONG SymbolSize, PVOID UserContext)
 {
-    
     stdext::hash_map<std::string, DWORD64>* symbols = reinterpret_cast<stdext::hash_map<std::string, DWORD64>*>(UserContext);
 
-    if (pSymInfo != NULL && pSymInfo->Name != NULL)
+	if (pSymInfo != NULL && pSymInfo->Name != NULL && pSymInfo->TypeIndex != 0)
     {
-        symbols->insert(std::make_pair(pSymInfo->Name, pSymInfo->Address));
+		//printf("type[%08X] : address[0x%08X] : name[%s]\n", pSymInfo->TypeIndex, (ULONG)pSymInfo->Address, pSymInfo->Name);
+		symbols->insert(std::make_pair(pSymInfo->Name, pSymInfo->Address));
     }
     
     return TRUE;

@@ -170,7 +170,8 @@ public:
      * Calls the function on the top of the stack in a protected environment that
      * triggers a debugger exception on error.
      */
-    int Call(unsigned long api, lua_State* L, int nargs, int nresults, int errorfunc);
+	int Call(unsigned long api, lua_State* L, int nargs, int nresults, int errorfunc);
+	int CallK(unsigned long api, lua_State* L, int nargs, int nresults, int errorfunc, int ctk, lua_CFunction k);
 
     /**
      * Returns the index of the script in the scripts array with the specified
