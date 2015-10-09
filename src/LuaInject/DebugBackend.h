@@ -27,6 +27,7 @@ along with Decoda.  If not, see <http://www.gnu.org/licenses/>.
 #include "Protocol.h"
 #include "CriticalSection.h"
 #include "LuaDll.h"
+#include "rwlock.h"
 
 #include <vector>
 #include <string>
@@ -76,7 +77,7 @@ public:
     /**
      * Attaches the debugger to the state.
      */
-    VirtualMachine* AttachState(unsigned long api, lua_State* L);
+	VirtualMachine* AttachState(unsigned long api, lua_State* L, lua_State* mainThread = NULL);
     
     void VMInitialize(unsigned long api, lua_State* L, VirtualMachine* vm);
 
@@ -84,6 +85,10 @@ public:
      * Detaches the debugger from the state.
      */
     void DetachState(unsigned long api, lua_State* L);
+
+	void SkynetContextMsgDispatchStart(unsigned long api, void *sm, void *q, int weight);
+	void SkynetContextMsgDispatchEnd(unsigned long api);
+	bool IsInSkynetDispatch();
 
     /**
      * Sends information about the script to the front end. This is called after
@@ -402,6 +407,7 @@ private:
     struct VirtualMachine
     {
         lua_State*      L;
+		lua_State*      mainThread;
         HANDLE          hThread;
         bool            initialized;
         int             callCount;
@@ -610,11 +616,15 @@ private:
     std::list<ClassInfo>            m_classInfos;
     std::vector<VirtualMachine*>    m_vms;
     StateToVmMap                    m_stateToVm;
+	VirtualMachine*                 m_breakVm;
     
     mutable CriticalSection         m_exceptionCriticalSection; // Controls access to ignoreExceptions 
     stdext::hash_set<std::string>   m_ignoreExceptions;
 
     std::vector<Api>                m_apis;
+
+	rwlock m_skynet_dispatch_lock;
+	DWORD m_isInSkynetDispatchTlsIdx;
 
     mutable bool                    m_warnedAboutUserData;
 

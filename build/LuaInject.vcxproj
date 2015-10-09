@@ -113,6 +113,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\src\LuaInject\atomic_lock.h" />
     <ClInclude Include="..\src\LuaInject\BabeLua.h" />
     <ClInclude Include="..\src\LuaInject\DebugBackend.h" />
     <ClInclude Include="..\src\LuaInject\DebugHelp.h" />
@@ -120,10 +121,12 @@
     <ClInclude Include="..\src\LuaInject\LuaCheckStack.h" />
     <ClInclude Include="..\src\LuaInject\LuaDll.h" />
     <ClInclude Include="..\src\LuaInject\LuaTypes.h" />
+    <ClInclude Include="..\src\LuaInject\rwlock.h" />
     <ClInclude Include="..\src\LuaInject\StdCall.h" />
     <ClInclude Include="..\src\LuaInject\XmlUtility.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\LuaInject\atomic_lock.cpp" />
     <ClCompile Include="..\src\LuaInject\BabeLua.cpp" />
     <ClCompile Include="..\src\LuaInject\DebugBackend.cpp">
     </ClCompile>

@@ -146,7 +146,10 @@ DebugBackend::DebugBackend()
     m_detachEvent           = NULL;
     m_mode                  = Mode_Continue;
     m_log                   = NULL;
+	m_breakVm				= NULL;
     m_warnedAboutUserData   = false;
+	rwlock_init(&m_skynet_dispatch_lock);
+	m_isInSkynetDispatchTlsIdx = TlsAlloc();
 }
 
 DebugBackend::~DebugBackend()
@@ -198,6 +201,7 @@ DebugBackend::~DebugBackend()
 
     m_scripts.clear();
     m_nameToScript.clear();
+	TlsFree(m_isInSkynetDispatchTlsIdx);
 
 }
 
@@ -227,8 +231,17 @@ void DebugBackend::Log(const char* fmt, ...)
         char fileName[_MAX_PATH];
         if (GetStartupDirectory(fileName, _MAX_PATH))
         {
-            strcat(fileName, "log.txt");
-            m_log = fopen("c:/temp/log.txt", "wt");
+			char tmp[_MAX_PATH];
+			strcpy(tmp, fileName);
+			strcat(tmp, "needdebuglog");
+			FILE *ffff = NULL;
+			ffff = fopen(tmp, "r");
+			if (ffff != NULL) {
+				fclose(ffff);
+
+				strcat(fileName, "log.txt");
+				m_log = fopen(fileName, "wt");
+			}
         }
     }
 
@@ -304,7 +317,7 @@ bool DebugBackend::Initialize(HINSTANCE hInstance)
 
 }
 
-DebugBackend::VirtualMachine* DebugBackend::AttachState(unsigned long api, lua_State* L)
+DebugBackend::VirtualMachine* DebugBackend::AttachState(unsigned long api, lua_State* L, lua_State* mainThread)
 {
 
     if (!GetIsAttached())
@@ -328,8 +341,9 @@ DebugBackend::VirtualMachine* DebugBackend::AttachState(unsigned long api, lua_S
     VirtualMachine* vm = new VirtualMachine;
 
     vm->L                   = L;
-    vm->hThread             = GetCurrentThread();
+    vm->hThread             = GetCurrentThread(); // TODO :; 对于skynet这里保存线程句柄没有意义，LUA会被其他线程调度
     vm->initialized         = false;
+	vm->mainThread          = mainThread;
     vm->callCount           = 0;
     vm->callStackDepth      = 0;
     vm->lastStepLine        = -2;
@@ -339,6 +353,7 @@ DebugBackend::VirtualMachine* DebugBackend::AttachState(unsigned long api, lua_S
     vm->luaJitWorkAround    = false;
     vm->breakpointInStack   = true;// Force the stack tobe checked when the first script is entered
     vm->haveActiveBreakpoints = false;
+	Log("Attach VM : %08X\n", L);
     
     m_vms.push_back(vm);
     m_stateToVm.insert(std::make_pair(L, vm));
@@ -389,6 +404,7 @@ void DebugBackend::DetachState(unsigned long api, lua_State* L)
 {
 
     CriticalSectionLock lock1(m_criticalSection);
+	// Log("Detach VM : %08X\n", L);
 
     // Remove all of the class names associated with this state.
 
@@ -422,17 +438,48 @@ void DebugBackend::DetachState(unsigned long api, lua_State* L)
     
     }
 
-    for (unsigned int i = 0; i < m_vms.size(); ++i)
+	std::vector<VirtualMachine *> subVms;
+	for (std::vector<VirtualMachine*>::iterator it = m_vms.begin(); it != m_vms.end(); )
     {
-        VirtualMachine* vm = m_vms[i];
+        VirtualMachine* vm = *it;
         if (vm->L == L)
         {
-            CloseHandle(vm->hThread);
             delete vm;
-            m_vms.erase(m_vms.begin() + i);
+			it = m_vms.erase(it);
         }
+		else if (vm->mainThread == L) {
+			subVms.push_back(vm);
+			++it;
+		}
+		else {
+			++it;
+		}
     }
 
+	for (std::vector<VirtualMachine*>::iterator it = subVms.begin(); it != subVms.end(); ++it) {
+		VirtualMachine* vm = *it;
+		DetachState(api, vm->L);
+	}
+}
+
+void DebugBackend::SkynetContextMsgDispatchStart(unsigned long api, void *sm, void *q, int weight)
+{
+	TlsSetValue(m_isInSkynetDispatchTlsIdx, (LPVOID)1);
+	assert(IsInSkynetDispatch());
+	rwlock_rlock(&m_skynet_dispatch_lock);
+}
+
+void DebugBackend::SkynetContextMsgDispatchEnd(unsigned long api)
+{
+	TlsSetValue(m_isInSkynetDispatchTlsIdx, (LPVOID)0);
+	assert(!IsInSkynetDispatch());
+	rwlock_runlock(&m_skynet_dispatch_lock);
+}
+
+bool DebugBackend::IsInSkynetDispatch()
+{
+	LPVOID p = TlsGetValue(m_isInSkynetDispatchTlsIdx);
+	return p != 0;
 }
 
 int DebugBackend::PostLoadScript(unsigned long api, int result, lua_State* L, const char* source, size_t size, const char* name)
@@ -739,6 +786,19 @@ void DebugBackend::Message(const char* message, MessageType type)
     m_eventChannel.Flush();
 }
 
+const char *KKKKKKK(int event)
+{
+	switch (event)
+	{
+	case LUA_HOOKCALL: return "LUA_HOOKCALL";
+	case LUA_HOOKRET: return "LUA_HOOKRET";
+	case LUA_HOOKLINE: return "LUA_HOOKLINE";
+	case LUA_HOOKCOUNT: return "LUA_HOOKCOUNT";
+	case LUA_HOOKTAILRET: return "LUA_HOOKTAILRET";
+	default: return "ddd";
+	}
+}
+
 void DebugBackend::HookCallback(unsigned long api, lua_State* L, lua_Debug* ar)
 {
 
@@ -846,12 +906,14 @@ void DebugBackend::HookCallback(unsigned long api, lua_State* L, lua_Debug* ar)
     int arevent = GetEvent(api, ar);
     if (arevent == LUA_HOOKLINE)
     {
-
         // Fill in the rest of the structure.
         lua_getinfo_dll(api, L, "Sl", ar);
         const char* arsource = GetSource(api, ar);
         int scriptIndex = GetScriptIndex(arsource);
-
+// 		if (strcmp(ar->ld52.source, "@./examples/main.lua") == 0 && ar->ld52.currentline == 10) {
+// 			int a = 0;
+// 			Log("[%08X] LUA_HOOKLINE %s : %d : %d -----------\n", vm, ar->ld52.source, ar->ld52.currentline, vm->callCount);
+// 		}
         if (scriptIndex == -1)
         {
             // This isn't a script we've seen before, so tell the debugger about it.
@@ -874,7 +936,7 @@ void DebugBackend::HookCallback(unsigned long api, lua_State* L, lua_Debug* ar)
             
             // If we're stepping on each line or we just stepped out of a function that
             // we were stepping over, break.
-            if (m_mode == Mode_StepOver && vm->callStackDepth > 0)
+			if (m_mode == Mode_StepOver && vm == m_breakVm && vm->callStackDepth > 0)
             {
                 if (stackDepth < vm->callStackDepth || (stackDepth == vm->callStackDepth && !onLastStepLine))
                 {
@@ -895,7 +957,7 @@ void DebugBackend::HookCallback(unsigned long api, lua_State* L, lua_Debug* ar)
         } 
         
         //Break if were doing some kind of stepping 
-        if (!onLastStepLine && (m_mode == Mode_StepInto || (m_mode == Mode_StepOver && vm->callCount == 0)))
+		if (!onLastStepLine && (m_mode == Mode_StepInto || (m_mode == Mode_StepOver && vm == m_breakVm && vm->callCount == 0)))
         {
             stop = true;
         }
@@ -919,18 +981,18 @@ void DebugBackend::HookCallback(unsigned long api, lua_State* L, lua_Debug* ar)
     }
     else
     {
-        if (m_mode == Mode_StepOver)
+		if (m_mode == Mode_StepOver)
         {
             if (GetIsHookEventRet( api, arevent)) // only LUA_HOOKRET for Lua 5.2, can also be LUA_HOOKTAILRET for older versions
             {
-                if (vm->callCount > 0)
+				if (vm->callCount > 0 && vm == m_breakVm)
                 {
                     --vm->callCount;
                 }
             }
             else if( GetIsHookEventCall( api, arevent)) // only LUA_HOOKCALL for Lua 5.1, can also be LUA_HOOKTAILCALL for newer versions
             {
-                if (m_mode == Mode_StepOver)
+				if (m_mode == Mode_StepOver && vm == m_breakVm)
                 {
                     ++vm->callCount;
                 }
@@ -1079,8 +1141,14 @@ void DebugBackend::WaitForContinue()
 
 void DebugBackend::WaitForEvent(HANDLE hEvent)
 {
+	if (IsInSkynetDispatch()) {
+		rwlock_runlock(&m_skynet_dispatch_lock);
+	}
     HANDLE hEvents[] = { hEvent, m_detachEvent };
     WaitForMultipleObjects(2, hEvents, FALSE, INFINITE);
+	if (IsInSkynetDispatch()) {
+		rwlock_rlock(&m_skynet_dispatch_lock);
+	}
 }
 
 bool DebugBackend::GetIsAttached() const
@@ -1191,7 +1259,9 @@ void DebugBackend::CommandThreadProc()
 
                     if (api != -1)
                     {
-                        success = Evaluate(api, L, expression, stackLevel, result);
+						rwlock_wlock(&m_skynet_dispatch_lock);
+						success = Evaluate(api, L, expression, stackLevel, result);
+						rwlock_wunlock(&m_skynet_dispatch_lock);
                     }
                     
                     m_commandChannel.WriteUInt32(success);
@@ -1262,7 +1332,9 @@ void DebugBackend::StepInto()
     m_mode = Mode_StepInto;
     SetEvent(m_stepEvent);
 
-    ActiveLuaHookInAllVms();
+	rwlock_wlock(&m_skynet_dispatch_lock);
+	ActiveLuaHookInAllVms();
+	rwlock_wunlock(&m_skynet_dispatch_lock);
 }
 
 void DebugBackend::StepOver()
@@ -1278,7 +1350,9 @@ void DebugBackend::StepOver()
     m_mode = Mode_StepOver;
     SetEvent(m_stepEvent);
 
+	rwlock_wlock(&m_skynet_dispatch_lock);
     ActiveLuaHookInAllVms();
+	rwlock_wunlock(&m_skynet_dispatch_lock);
 }
 
 
@@ -1300,7 +1374,9 @@ void DebugBackend::Continue()
 void DebugBackend::Break()
 {
     m_mode = Mode_StepInto;
-    ActiveLuaHookInAllVms();
+	rwlock_wlock(&m_skynet_dispatch_lock);
+	ActiveLuaHookInAllVms();
+	rwlock_wunlock(&m_skynet_dispatch_lock);
 }
 
 void DebugBackend::ToggleBreakpoint(lua_State* L, unsigned int scriptIndex, unsigned int line)
@@ -1394,7 +1470,9 @@ void DebugBackend::SetHaveActiveBreakpoints(bool breakpointsActive)
     //We defer to UpdateHookMode to turn off the hook fully
     if(breakpointsActive)
     {
-        ActiveLuaHookInAllVms();
+		rwlock_wlock(&m_skynet_dispatch_lock);
+		ActiveLuaHookInAllVms();
+		rwlock_wunlock(&m_skynet_dispatch_lock);
     }
 }
 
@@ -1406,7 +1484,7 @@ void DebugBackend::DeleteAllBreakpoints(){
     }
 
     //Set all haveActiveBreakpoints for the vms back to false we leave to the hook being called for the vm
-    SetHaveActiveBreakpoints(false);
+	SetHaveActiveBreakpoints(false);
 }
 
 void DebugBackend::SendBreakEvent(unsigned long api, lua_State* L, int stackTop)
@@ -1494,8 +1572,9 @@ void DebugBackend::SendExceptionEvent(lua_State* L, const char* message)
 void DebugBackend::BreakFromScript(unsigned long api, lua_State* L)
 {
     CriticalSectionLock lock(m_breakLock);
-
+	m_breakVm = GetVm(L);
     SendBreakEvent(api, L);
+	lock.UnLock();
     WaitForContinue();        
 }
 

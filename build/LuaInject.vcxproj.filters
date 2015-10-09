@@ -36,6 +36,12 @@
     <ClInclude Include="..\src\LuaInject\BabeLua.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\LuaInject\rwlock.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\LuaInject\atomic_lock.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\LuaInject\DebugBackend.cpp">
@@ -63,6 +69,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\src\LuaInject\BabeLua.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\LuaInject\atomic_lock.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

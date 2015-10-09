@@ -24,12 +24,28 @@ along with Decoda.  If not, see <http://www.gnu.org/licenses/>.
 #include "CriticalSection.h"
 
 CriticalSectionLock::CriticalSectionLock(CriticalSection& criticalSection) :
-    m_criticalSection(criticalSection)
+m_criticalSection(criticalSection), m_bIsLock(false)
 {
-    m_criticalSection.Enter();
+	Lock();
 }
 
 CriticalSectionLock::~CriticalSectionLock()
 {
-    m_criticalSection.Exit();
+	UnLock();
+}
+
+void CriticalSectionLock::Lock()
+{
+	if (!m_bIsLock){
+		m_criticalSection.Enter();
+		m_bIsLock = true;
+	}
+}
+
+void CriticalSectionLock::UnLock()
+{
+	if (m_bIsLock) {
+		m_criticalSection.Exit();
+		m_bIsLock = false;
+	}
 }

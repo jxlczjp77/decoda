@@ -124,6 +124,7 @@ typedef int             (*lua_pushthread_cdecl_t)       (lua_State *L);
 typedef void *          (*lua_newuserdata_cdecl_t)      (lua_State *L, size_t size);
 typedef lua_State*      (*luaL_newstate_cdecl_t)        ();
 typedef int             (*lua_checkstack_cdecl_t)       (lua_State* L, int extra);
+typedef void *          (*skynet_context_message_dispatch_cdecl_t)(void *sm, void *q, int weight);
 
 typedef lua_State*      (__stdcall *lua_open_stdcall_t)           (int stacksize);
 typedef lua_State*      (__stdcall *lua_open_500_stdcall_t)       ();
@@ -198,11 +199,11 @@ typedef int             (__stdcall *lua_pushthread_stdcall_t)     (lua_State *L)
 typedef void *          (__stdcall *lua_newuserdata_stdcall_t)    (lua_State *L, size_t size);
 typedef lua_State*      (__stdcall *luaL_newstate_stdcall_t)      ();
 typedef int             (__stdcall *lua_checkstack_stdcall_t)     (lua_State* L, int extra);
+typedef void *          (__stdcall *skynet_context_message_dispatch_stdcall_t)(void *sm, void *q, int weight);
 
 typedef HMODULE         (WINAPI *LoadLibraryExW_t)              (LPCWSTR lpFileName, HANDLE hFile, DWORD dwFlags);
 typedef ULONG           (WINAPI *LdrLockLoaderLock_t)           (ULONG flags, PULONG disposition, PULONG cookie);
 typedef LONG            (WINAPI *LdrUnlockLoaderLock_t)         (ULONG flags, ULONG cookie);
-
 
 /**
  * Structure that holds pointers to all of the Lua API functions.
@@ -296,6 +297,7 @@ struct LuaInterface
     lua_newuserdata_cdecl_t      lua_newuserdata_dll_cdecl;
     luaL_newstate_cdecl_t        luaL_newstate_dll_cdecl;
     lua_checkstack_cdecl_t       lua_checkstack_dll_cdecl;
+	skynet_context_message_dispatch_cdecl_t skynet_context_message_dispatch_dll_cdecl;
 
     // stdcall functions.
     lua_open_stdcall_t           lua_open_dll_stdcall;
@@ -371,6 +373,7 @@ struct LuaInterface
     lua_newuserdata_stdcall_t    lua_newuserdata_dll_stdcall;
     luaL_newstate_stdcall_t      luaL_newstate_dll_stdcall;
     lua_checkstack_stdcall_t     lua_checkstack_dll_stdcall;
+	skynet_context_message_dispatch_stdcall_t skynet_context_message_dispatch_dll_stdcall;
 
     lua_CFunction                DecodaOutput;
     lua_CFunction                CPCallHandler;
@@ -675,12 +678,12 @@ HookMode GetHookMode(unsigned long api, lua_State* L)
 
 bool GetIsHookEventRet( unsigned long api, int event)
 {
-    return event == LUA_HOOKRET || event == g_interfaces[api].hookTailRet;
+    return event == LUA_HOOKRET /*|| event == g_interfaces[api].hookTailRet*/;
 }
 
 bool GetIsHookEventCall( unsigned long api, int event)
 {
-    return event == LUA_HOOKCALL || event == g_interfaces[api].hookTailCall;
+    return event == LUA_HOOKCALL /*|| event == g_interfaces[api].hookTailCall*/;
 }
 
 int GetEvent(unsigned long api, const lua_Debug* ar)
@@ -2527,7 +2530,7 @@ lua_State* lua_newthread_worker(unsigned long api, lua_State* L, bool& stdcall)
     
     if (result != NULL)
     {
-        DebugBackend::Get().AttachState(api, result);
+        DebugBackend::Get().AttachState(api, result, L);
     }
 
     return result;
@@ -2824,6 +2827,42 @@ __declspec(naked) void lua_close_intercept(unsigned long api, lua_State* L)
     lua_close_worker(api, L, stdcall);
 
     INTERCEPT_EPILOG_NO_RETURN(4)
+
+}
+
+#pragma auto_inline(off)
+void *skynet_context_message_dispatch_worker(unsigned long api, void *sm, void *q, int weight, bool& stdcall)
+{
+	DebugBackend::Get().SkynetContextMsgDispatchStart(api, sm, q, weight);
+	void *p = NULL;
+	if (g_interfaces[api].skynet_context_message_dispatch_dll_cdecl) {
+		p = g_interfaces[api].skynet_context_message_dispatch_dll_cdecl(sm, q, weight);
+		stdcall = false;
+	}
+	else if (g_interfaces[api].skynet_context_message_dispatch_dll_stdcall) {
+		p = g_interfaces[api].skynet_context_message_dispatch_dll_stdcall(sm, q, weight);
+		stdcall = true;
+	}
+	DebugBackend::Get().SkynetContextMsgDispatchEnd(api);
+
+	return p;
+
+}
+#pragma auto_inline()
+
+__declspec(naked) void skynet_context_message_dispatch_intercept(unsigned long api, void *sm, void *q, int weight)
+{
+	bool    stdcall;
+	void *p;
+	INTERCEPT_PROLOG()
+
+		// We push the actual functionality of this function into a separate, "normal"
+		// function so avoid interferring with the inline assembly and other strange
+		// aspects of this function.
+	p = skynet_context_message_dispatch_worker(api, sm, q, weight, stdcall);
+
+	__asm { __asm mov eax, p };
+	INTERCEPT_EPILOG_NO_RETURN(4 * 5)
 
 }
 
@@ -3310,6 +3349,7 @@ bool LoadLuaFunctions(const stdext::hash_map<std::string, DWORD64>& symbols, HAN
     
     GET_FUNCTION(lua_newthread);
     GET_FUNCTION(lua_close);
+	GET_FUNCTION_OPTIONAL(skynet_context_message_dispatch);
     GET_FUNCTION(lua_error);
     GET_FUNCTION_OPTIONAL(lua_absindex); // Only present in Lua 5.2+
     GET_FUNCTION(lua_sethook);
@@ -3445,6 +3485,7 @@ bool LoadLuaFunctions(const stdext::hash_map<std::string, DWORD64>& symbols, HAN
     HOOK_FUNCTION(lua_open_500);
     HOOK_FUNCTION(lua_newstate);
     HOOK_FUNCTION(lua_close);
+	HOOK_FUNCTION(skynet_context_message_dispatch);
     HOOK_FUNCTION(lua_newthread);
     HOOK_FUNCTION(lua_pcall);
     HOOK_FUNCTION(lua_pcallk);
@@ -3786,7 +3827,7 @@ void LoadSymbolsRecursively(std::set<std::string>& loadedModules, stdext::hash_m
         {
             // SymFromName is really slow, so we gather up our own list of the symbols that we
             // can index much faster.
-            SymEnumSymbols_dll(hProcess, base, "lua*", GatherSymbolsCallback, reinterpret_cast<PVOID>(&symbols));
+            SymEnumSymbols_dll(hProcess, base, NULL, GatherSymbolsCallback, reinterpret_cast<PVOID>(&symbols));
         }
 
         // Check to see if the module contains the Lua signature but we didn't find any Lua functions.
@@ -3800,7 +3841,7 @@ void LoadSymbolsRecursively(std::set<std::string>& loadedModules, stdext::hash_m
 
             if (base != 0)
             {
-                SymEnumSymbols_dll(hProcess, base, "lua_*", FindSymbolsCallback, &foundLuaFunctions);
+				SymEnumSymbols_dll(hProcess, base, NULL, FindSymbolsCallback, &foundLuaFunctions);
             }
 
             if (!foundLuaFunctions)

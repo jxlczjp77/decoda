@@ -34,8 +34,11 @@ public:
      */
     ~CriticalSectionLock();
 
-private:
+	void Lock();
+	void UnLock();
 
+private:
+	bool m_bIsLock;
     CriticalSection&    m_criticalSection;
 
 };
